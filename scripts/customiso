@@ -1,0 +1,100 @@
+#!/bin/sh
+
+PARSER_OUTPUT=$(python - $* <<_EOF_
+import argparse
+import string
+parser = argparse.ArgumentParser(prog='$0')
+parser.add_argument('bootiso', help='source ISO file')
+parser.add_argument('--isolinuxcfg', help='txt.cfg file',
+    default='txt.cfg')
+parser.add_argument('--customscript', help='custom configure os', default='customconfig')
+parser.add_argument('--grubcfg', help='grub.cfg file',
+    default='grub.cfg')
+parser.add_argument('--autoinstall', help='autoinstall file', default='user-data')
+parser.add_argument('--output-bootiso', help='output ISO file',
+    default='Ubuntu-custom.iso')
+parser.add_argument('--overwrite', action='store_true', help='overwrite')
+args=parser.parse_args()
+tr=string.maketrans('-','_')
+print '#'
+for k, v in vars(args).items():
+    k = k.upper().translate(tr)
+    print '{0}={1}'.format(k, v)
+exit(0)
+_EOF_
+)
+PARSER_STATUS=$?
+case "$PARSER_OUTPUT" in
+\#*) eval "$PARSER_OUTPUT" ;;
+*) echo "$PARSER_OUTPUT"; exit $PARSER_STATUS ;;
+esac
+
+if [ ! -b /dev/loop0 ]; then
+    echo "/dev/loop0 not found"
+    exit 1
+fi
+if [ ! -f "/opt/work/${BOOTISO}" ]; then
+    echo "/opt/work/$BOOTISO not found"
+    exit 1
+fi
+if [ ! -f "/opt/work/${ISOLINUXCFG}" ]; then
+    echo "/opt/work/$ISOLINUXCFG not found"
+    exit 1
+fi
+if [ ! -f "/opt/work/${GRUBCFG}" ]; then
+    echo "/opt/work/$GRUBCFG not found"
+    exit 1
+fi
+if [ ! -f "/opt/work/${AUTOINSTALL}" ]; then
+    echo "/opt/work/${AUTOINSTALL} not found"
+    exit 1
+fi
+if [ -f "/opt/work/${OUTPUT_BOOTISO}" ]; then
+    if [ "$OVERWRITE" != "True" ]; then
+        echo "/opt/work/$OUTPUT_BOOTISO already exists"
+        exit 1
+    fi
+fi
+
+if [ ! -d "/opt/work/${CUSTOMSCRIPT}" ]; then
+    echo "/opt/work/${CUSTOMSCRIPT} no such file or directory"
+    exit 1
+fi
+
+
+mkdir /opt/bootiso /opt/custom-bootiso || exit 1
+
+echo "Copy source ISO files to /opt/custom-bootiso"
+mount -r -o loop "/opt/work/${BOOTISO}" /opt/bootiso || exit 1
+cp -rp /opt/bootiso/. /opt/custom-bootiso || exit 1
+umount /opt/bootiso && rmdir /opt/bootiso
+#chmod -R u+w /opt/custom-bootiso
+
+echo "Copy user-data to /opt/custom-bootiso"
+mkdir -p /opt/custom-bootiso/nocloud
+touch /opt/custom-bootiso/nocloud/meta-data
+cp "/opt/work/${AUTOINSTALL}" /opt/custom-bootiso/nocloud/${AUTOINSTALL} || exit 1
+
+echo "Copy isolinux.cfg to /opt/custom-bootiso"
+cp "/opt/work/${ISOLINUXCFG}" /opt/custom-bootiso/isolinux/${ISOLINUXCFG}
+
+echo "Copy grub.cfg to /opt/custom-bootiso"
+cp "/opt/work/${GRUBCFG}" /opt/custom-bootiso/boot/grub/${GRUBCFG}
+
+echo "Copy custom script to /opt/custom-bootiso"
+cp -r "/opt/work/${CUSTOMSCRIPT}" /opt/custom-bootiso/${CUSTOMSCRIPT}
+
+echo "Create the new ISO file"
+cd /opt/custom-bootiso && xorriso -as mkisofs -r \
+  -V Ubuntu\ custom\ amd64 \
+  -o "/opt/work/${OUTPUT_BOOTISO}" \
+  -J -l -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot \
+  -boot-load-size 4 -boot-info-table \
+  -eltorito-alt-boot -e boot/grub/efi.img -no-emul-boot \
+  -isohybrid-gpt-basdat -isohybrid-apm-hfsplus \
+  boot .
+cd /
+rm -rf /opt/custom-bootiso
+
+exit 0
+#   -isohybrid-mbr /usr/lib/ISOLINUX/isohdpfx.bin  \

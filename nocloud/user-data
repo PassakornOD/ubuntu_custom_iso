@@ -1,0 +1,81 @@
+#cloud-config
+autoinstall:
+  apt:
+    geoip: true
+    preserve_sources_list: false
+    primary:
+    - arches: [amd64, i386]
+      uri: http://th.archive.ubuntu.com/ubuntu
+    - arches: [default]
+      uri: http://ports.ubuntu.com/ubuntu-ports
+  identity: {hostname: mfecubutu, password: $6$uIxAZAkH/ZKso//U$3BavY8g3szcKnWZy86M4P/yKotvDreei8.ZVzZ7Z5LIaVZ/4P/HoLJ9FahtY.zbSFQIMwB7hveqiRginpWli71,
+    realname: sysreport, username: sysreport}
+  keyboard: {layout: us, toggle: null, variant: ''}
+  locale: en_US.UTF-8
+  refresh-installer:
+    update: no
+  network:
+    ethernets:
+      ens33: {dhcp4: false}
+    version: 2
+  ssh:
+    allow-pw: true
+    authorized-keys: []
+    install-server: true
+  late-commands:
+    # - curtin in-target --target=/target -- mkdir -p /root
+    - cp -r /cdrom/scripts /target/
+  package_update: false
+  package_upgrade: false
+  storage:
+    config:
+    - {ptable: gpt, path: /dev/sda, wipe: superblock, preserve: false, name: '', grub_device: false,
+      type: disk, id: disk-sda}
+    - {path: /dev/sdb, wipe: superblock, preserve: false, name: '', grub_device: false,
+      type: disk, id: disk-sdb}
+    - {device: disk-sda, size: 536870912, wipe: superblock, flag: boot, number: 1,
+      preserve: false, grub_device: true, type: partition, id: partition-1}
+    - {fstype: fat32, volume: partition-1, preserve: false, type: format, id: format-1}
+    - {device: disk-sda, size: 1073741824, wipe: superblock, flag: '', number: 2,
+      preserve: false, grub_device: false, type: partition, id: partition-2}
+    - {fstype: ext4, volume: partition-2, preserve: false, type: format, id: format-2}
+    - {device: disk-sda, size: 41336963072, wipe: superblock, flag: '', number: 3,
+      preserve: false, grub_device: false, type: partition, id: partition-3}
+    - name: vg_sas
+      devices: [partition-3]
+      preserve: false
+      type: lvm_volgroup
+      id: lvm_volgroup-0
+    - {name: lv_var, volgroup: lvm_volgroup-0, size: 10737418240B, wipe: superblock,
+      preserve: false, type: lvm_partition, id: lvm_partition-0}
+    - {fstype: ext4, volume: lvm_partition-0, preserve: false, type: format, id: format-4}
+    - {name: lv_var_log, volgroup: lvm_volgroup-0, size: 5368709120B, wipe: superblock,
+      preserve: false, type: lvm_partition, id: lvm_partition-1}
+    - {fstype: ext4, volume: lvm_partition-1, preserve: false, type: format, id: format-5}
+    - {name: lv_home, volgroup: lvm_volgroup-0, size: 10737418240B, wipe: superblock,
+      preserve: false, type: lvm_partition, id: lvm_partition-2}
+    - {fstype: ext4, volume: lvm_partition-2, preserve: false, type: format, id: format-6}
+    - {name: lv_root, volgroup: lvm_volgroup-0, size: 14491320320B, wipe: superblock,
+      preserve: false, type: lvm_partition, id: lvm_partition-3}
+    - {fstype: ext4, volume: lvm_partition-3, preserve: false, type: format, id: format-7}
+    - {path: /, device: format-7, type: mount, id: mount-7}
+    - name: vg_ssd
+      devices: [disk-sdb]
+      preserve: false
+      type: lvm_volgroup
+      id: lvm_volgroup-1
+    - {name: lv_ssd, volgroup: lvm_volgroup-1, size: 10737418240B, wipe: superblock,
+      preserve: false, type: lvm_partition, id: lvm_partition-4}
+    - {fstype: ext4, volume: lvm_partition-4, preserve: false, type: format, id: format-8}
+    - {path: /ssd, device: format-8, type: mount, id: mount-8}
+    - {name: lv_images, volgroup: lvm_volgroup-1, size: 10733223936B, wipe: superblock,
+      preserve: false, type: lvm_partition, id: lvm_partition-5}
+    - {fstype: ext4, volume: lvm_partition-5, preserve: false, type: format, id: format-9}
+    - {path: /ssd/images, device: format-9, type: mount, id: mount-9}
+    - {path: /boot, device: format-2, type: mount, id: mount-2}
+    - {path: /var, device: format-4, type: mount, id: mount-4}
+    - {path: /var/log, device: format-5, type: mount, id: mount-5}
+    - {path: /home, device: format-6, type: mount, id: mount-6}
+    - {path: /boot/efi, device: format-1, type: mount, id: mount-1}
+  updates: security
+  version: 1
